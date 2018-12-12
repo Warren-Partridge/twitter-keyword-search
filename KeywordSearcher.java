@@ -1,30 +1,44 @@
 import java.util.*;
 import java.util.Scanner;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.io.IOException;
 
 
 public class KeywordSearcher {
+    final String TWEETS_FILEPATH = "tweets.txt";
 
-    public ArrayList<String> tweets;
-    public ArrayList<HashSet<String>> tweetSets;
-    public ArrayList<SetTuple> similarities;
-    public int numEntriesToDisplay;
-//    public Map<int, double> similiarities;
+    public List<String> tweets; // Immutable array of tweets read as input
+    public ArrayList<HashSet<String>> tweetSets; // Sets of words in a particular tweet (basically inverted index but a set)
+    public ArrayList<SetSimilarityTuple> similarities; // Mappings of tweet indices to similarity scores
+    public int numEntriesToDisplay; // Number of entries to display per search (set to 10)
+
 
     public KeywordSearcher(int numEntries) {
-        this.tweets = new ArrayList<String>();
-        this.tweets.add("Google unveils its Container Engine to run apps in the best possible way on its cloud flip.it/RPQLZ");
-        this.tweets.add("Yahoo tops list of 10 most active tech acquirers in 2013 flip.it/g5c2f");
-        this.tweets.add("Tresorit opens its end-to-end encrypted file-sharing service to the public flip.it/EK1IZ");
+        System.out.println("Welcome to Twitter Keyword Searcher!");
+        try { // Try importing tweets from tweets.txt, newline delimited
+
+            this.tweets = Files.readAllLines(Paths.get(TWEETS_FILEPATH));
+            System.out.println("Tweets successfully read from " + TWEETS_FILEPATH + ".");
+        } catch (IOException e){
+            System.out.println("Failed to read tweets from " + TWEETS_FILEPATH + ". Printing error below:");
+            System.out.println(e);
+        }
+
+        System.out.println("(To exit, type EXIT at the prompt.)");
+        System.out.println("=========================================");
 
         this.tweetSets = new ArrayList<HashSet<String>>();
-        this.similarities = new ArrayList<SetTuple>();
+        this.similarities = new ArrayList<SetSimilarityTuple>();
         this.numEntriesToDisplay = numEntries;
     }
+
 
     public static void main(String[] args) {
         KeywordSearcher kws = new KeywordSearcher(10);
         kws.search();
     }
+
 
     private HashSet<String> makeSetFromSentence(String sentence) {
         // I considered using an ArrayList here, and then sorting the words to create a true inverted index.
@@ -45,29 +59,21 @@ public class KeywordSearcher {
         HashSet<String> result = new HashSet<String>();
 
         while (sentence.length() != 0) {
-//            System.out.println("Breaking down sentence " + sentence);
-
             int index = sentence.indexOf(" ");
 
-//            if (index < 0 && sentence.length() == 0) {
-//                System.out.println("Weirdness");
-//                return result;
-//            } else
-//
             if (index < 0 && sentence.length() > 0) { // Case for last word in the sentence
-                // TODO: Make all lowercase
-                result.add(sentence);
+                result.add(sentence.toLowerCase());
 
                 return result;
             } else {
-                result.add(sentence.substring(0, index));
-                // TODO: Make all lowercase
+                result.add(sentence.substring(0, index).toLowerCase());
                 sentence = sentence.substring(index + 1);
             }
         }
 
         return result;
     }
+
 
     private double getSimilarityBetweenSets(HashSet<String> set1, HashSet<String> set2) {
         if (set2.size() < set1.size()) return getSimilarityBetweenSets(set2, set1);
@@ -77,10 +83,11 @@ public class KeywordSearcher {
             if (set2.contains(s)) count++;
         }
 
-        int union = set1.size() + set2.size() - count;
+        int common = set1.size() + set2.size() - count;
 
-        return (double) count / union;
+        return (double) count / common;
     }
+
 
     public void search() {
         for (String tweet : this.tweets) { // Make sets of all input tweets to prepare for searching
@@ -88,29 +95,39 @@ public class KeywordSearcher {
         }
 
         Scanner reader = new Scanner(System.in);
-        String query = reader.nextLine();
+        boolean searching = true;
 
-        HashSet<String> querySet = this.makeSetFromSentence(query);
+        while (searching) {
+            System.out.print("Please enter a tweet search query: ");
+            String query = reader.nextLine();
 
-        for (int i = 0; i < this.tweetSets.size(); i++) {
-            SetTuple similarity = new SetTuple(i, this.getSimilarityBetweenSets(querySet, this.tweetSets.get(i)));
-            this.similarities.add(similarity);
+            if (query.compareTo("EXIT") == 0) {
+                System.out.println("Goodbye!");
+                break;
+            }
+            query.toLowerCase();
+
+            HashSet<String> querySet = this.makeSetFromSentence(query);
+
+            for (int i = 0; i < this.tweetSets.size(); i++) {
+                SetSimilarityTuple similarity = new SetSimilarityTuple(i, this.getSimilarityBetweenSets(querySet, this.tweetSets.get(i)));
+                this.similarities.add(similarity);
+            }
+
+            Collections.sort(this.similarities);
+
+            // Don't display more entries than is possible
+            int numEntriesPossibleToDisplay = this.numEntriesToDisplay < this.tweetSets.size() ? this.numEntriesToDisplay : this.tweetSets.size();
+
+            System.out.format("Here are the top %d tweets I found most similar to your query:\n", this.numEntriesToDisplay);
+            System.out.format("%7s | %16s | %s", "Tweet #", "Similarity Score", "Tweet Content\n");
+            System.out.println("-----------------------------------------------------");
+            for (int i = 0; i < numEntriesPossibleToDisplay; i++) {
+                System.out.format("%7d | %16f | %s\n", i, this.similarities.get(i).similarityScore, this.tweets.get(this.similarities.get(i).index));
+            }
+            System.out.println();
         }
 
-        Collections.sort(this.similarities);
-
-        // Don't display more entries than is possible
-        int numEntriesPossibleToDisplay = this.numEntriesToDisplay < this.tweetSets.size() ? this.numEntriesToDisplay : this.tweetSets.size();
-
-        System.out.format("%7s | %16s | %s", "Tweet #", "Similarity Score", "Tweet Content\n");
-        System.out.println("------------------------------------------");
-        for (int i = 0; i < numEntriesPossibleToDisplay; i++) {
-            System.out.format("%7d | %16f | %s\n", i, this.similarities.get(i).similarityScore, this.tweets.get(this.similarities.get(i).index));
-        }
-
-
-
-        System.out.println(querySet);
         reader.close();
     }
 }
