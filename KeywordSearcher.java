@@ -126,6 +126,8 @@ public class KeywordSearcher {
                 System.out.format("%7d | %16f | %s\n", i, this.similarities.get(i).similarityScore, this.tweets.get(this.similarities.get(i).index));
             }
             System.out.println();
+
+            this.similarities = new ArrayList<SetSimilarityTuple>();
         }
 
         reader.close();
